@@ -1,0 +1,22 @@
+raw/
+build/
+footage/
+runs/
+*.inp
+.DS_Store
+.vscode/
+outonparole
+*.exe
+dist/
+sessions/
+builds/
+__pycache__/
+
+# android / gradle
+.gradle/
+local.properties
+.cxx/
+app/build/
+*.iml
+.idea/
+captures/
