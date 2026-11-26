@@ -58,8 +58,11 @@ file(GLOB GAME_SOURCES ${REPO}/src/*.c ${REPO}/src/android/*.c)
 add_library(outonparole SHARED
     ${GAME_SOURCES} ${OOP_GEN_DIR}/assets.c ${OOP_GEN_DIR}/sfx.c ${RAYLIB_SOURCES})
 
+# Note: do not add ${RL_PATCHED}/external here. raylib keeps a Win32-only external/dirent.h that
+# would shadow the NDK's <dirent.h> and pull in <io.h>. raylib includes its external headers with
+# paths relative to ${RL_PATCHED} ("external/..."), which still resolves.
 target_include_directories(outonparole PRIVATE
-    ${REPO}/src ${RL_PATCHED} ${RL_PATCHED}/external ${ANDROID_NDK}/sources/android/native_app_glue)
+    ${REPO}/src ${RL_PATCHED} ${ANDROID_NDK}/sources/android/native_app_glue)
 
 target_compile_definitions(outonparole PRIVATE
     PLATFORM_ANDROID GRAPHICS_API_OPENGL_ES3 OOP_GLES
