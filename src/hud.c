@@ -710,11 +710,11 @@ static void speedo(int w, int h, float S)
 
 // ---- full-screen states
 
-static float mode_t;
+static float mode_time;
 
 static void end_card(int w, int h, float S)
 {
-    float age = game_s - mode_t;
+    float age = game_s - mode_time;
     float a = Clamp(age / 1.2f, 0, 1);
     DrawRectangle(0, 0, w, h, (Color){ 4, 5, 8, (unsigned char)(170 * a) });
     bool dead = mode == MODE_DEAD;
@@ -823,7 +823,7 @@ void hud_draw(int w, int h)
 {
     float S = h / 1080.0f;
     if (S < 0.5f) S = 0.5f;
-    mode_t = mode_since;
+    mode_time = mode_since;
     rlDisableBackfaceCulling();
     rlDisableDepthTest();
     BeginBlendMode(BLEND_ALPHA);
