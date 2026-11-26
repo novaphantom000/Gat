@@ -1,0 +1,106 @@
+name: android
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  RAYLIB_TAG: '6.2'
+  BLENDER_VERSION: ${{ vars.BLENDER_VERSION || '4.2.3' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y glslang-tools clang libgles-dev
+      - name: Shaders compile as GLSL 3.30 and GLSL ES 3.00
+        run: python3 tools/check_shaders.py
+      - name: Game sources compile against GLES3 with the Android defines
+        run: |
+          git clone --depth 1 --branch "$RAYLIB_TAG" https://github.com/raysan5/raylib "$RUNNER_TEMP/raylib"
+          for f in src/*.c src/android/touch.c; do
+            clang -std=gnu11 -fsyntax-only -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-unused-parameter \
+              -D__ANDROID__ -DPLATFORM_ANDROID -DGRAPHICS_API_OPENGL_ES3 -DOOP_GLES -D_DEFAULT_SOURCE \
+              -I"$RUNNER_TEMP/raylib/src" -I"$RUNNER_TEMP/raylib/src/external" -Isrc "$f"
+          done
+
+  apk:
+    needs: checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install ffmpeg, numpy and the libraries headless Blender loads
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg python3-numpy libxi6 libxkbcommon0 libgl1 libxxf86vm1 libxfixes3 libxrender1 libsm6
+
+      # The models are not in the repo. RAW_PACKS_URL is a repository secret pointing at a zip of the `raw/` folder
+      # that works with `make assets` on your machine (Quaternius packs, the Sketchfab car pack, the helicopter).
+      - name: Fetch model packs
+        env:
+          RAW_PACKS_URL: ${{ secrets.RAW_PACKS_URL }}
+        run: |
+          if [ -z "$RAW_PACKS_URL" ]; then
+            echo "::error::Add a repository secret RAW_PACKS_URL: a download link to a zip of your raw/ folder (see README)."
+            exit 1
+          fi
+          curl -fsSL "$RAW_PACKS_URL" -o "$RUNNER_TEMP/raw.zip"
+          unzip -q "$RUNNER_TEMP/raw.zip" -d "$RUNNER_TEMP/raw-unzipped"
+          # accept a zip with raw/ at the top or the contents directly
+          if [ -d "$RUNNER_TEMP/raw-unzipped/raw" ]; then mv "$RUNNER_TEMP/raw-unzipped/raw" raw; else mv "$RUNNER_TEMP/raw-unzipped" raw; fi
+          ls raw
+
+      - name: Cache Blender
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/blender
+          key: blender-${{ env.BLENDER_VERSION }}
+
+      - name: Install Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        run: |
+          minor="${BLENDER_VERSION%.*}"
+          curl -fsSL "https://download.blender.org/release/Blender${minor}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" -o "$RUNNER_TEMP/blender.tar.xz"
+          mkdir -p ~/blender
+          tar -xf "$RUNNER_TEMP/blender.tar.xz" -C ~/blender --strip-components=1
+
+      - name: Pack sounds and models into build/sfx.c and build/assets.c
+        run: |
+          export BLENDER="$HOME/blender/blender"
+          python3 tools/pack_sfx.py
+          python3 tools/pack.py
+          ls -l build/assets.c build/sfx.c
+
+      - name: Android SDK pieces
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.2.12479018"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --stacktrace -Pandroid.native.buildOutput=verbose
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gat-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Attach APK to the release for a v* tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/*.apk

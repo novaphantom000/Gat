@@ -7,7 +7,7 @@ sys.path.insert(0, here)
 import meshenc, carlook, gltfio
 
 BUILD = os.path.join(here, '..', 'build')
-BLENDER = '/Applications/Blender.app/Contents/MacOS/Blender'
+BLENDER = os.environ.get('BLENDER', '/Applications/Blender.app/Contents/MacOS/Blender')
 CARS = ['sedan', 'compact', 'hatchback', 'minivan', 'pickup', 'suv', 'wagon', 'offroad']
 MASS = dict(sedan=1500, compact=1200, hatchback=1250, minivan=1900, pickup=2000, suv=2000, wagon=1600, offroad=2100,
             cop=1700, taxi=1600)

@@ -8,7 +8,7 @@ renderer path, an AAudio sound backend and on-screen touch controls.
 > GLES3 headers with the Android defines, and all 16 shader programs (32 stages) compile as GLSL ES 3.00 (`python3 tools/check_shaders.py`).
 > The APK itself has not been built or launched. See "Untested" below.
 
-## You need one thing first: the packed assets
+## The packed assets
 
 The models and sounds are compiled into the executable from two generated files, `build/assets.c` and `build/sfx.c`.
 Neither is in the upstream repo, and the build stops with a message until both exist.
@@ -21,7 +21,18 @@ Neither is in the upstream repo, and the build stops with a message until both e
 The packs are Quaternius characters/animations/guns (CC0), the car pack by comrade1280 on Sketchfab (CC BY 4.0, needs
 a Sketchfab login to download) and the police helicopter from Poly Pizza (CC0). They are not redistributed here.
 
-## Build
+## Build with CI (the intended way)
+
+`.github/workflows/android.yml` does everything on GitHub: it checks the shaders and sources, packs the sounds
+(`pack_sfx.py`) and models (Blender 4.2.3 headless, then `pack.py`), builds the APK with Gradle and uploads it as the
+`gat-debug-apk` artifact (and attaches it to the release when you push a `v*` tag).
+
+One-time setup: zip your local `raw/` folder (the one that works with `make assets`) and put a download link to it in a
+repository secret named `RAW_PACKS_URL`, because the model packs cannot live in a public repo. Optionally set a repository
+variable `BLENDER_VERSION` to match the Blender you use. Then push, or run the workflow by hand from the Actions tab.
+The workflow has not been run yet; the first run is the first real build, so expect to fix something.
+
+## Build locally
 
 Needs Android Studio (or JDK 17 + Android SDK), NDK r26 or newer, CMake 3.22.1 from the SDK manager, and network
 access on the first configure (raylib 6.2 is fetched from GitHub; pass `-DRAYLIB_DIR=/path/to/raylib` to use a local copy).
