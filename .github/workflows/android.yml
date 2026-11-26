@@ -45,29 +45,35 @@ jobs:
 
       # The models are not in the repo. RAW_PACKS_URL is a repository secret pointing at a zip of the `raw/` folder
       # that works with `make assets` on your machine (Quaternius packs, the Sketchfab car pack, the helicopter).
+      # Without it the job still builds: the sounds come from assets/sfx in the repo and tools/stub_assets.py writes a
+      # placeholder build/assets.c, so the APK compiles and links but ships no game models.
       - name: Fetch model packs
+        id: packs
         env:
           RAW_PACKS_URL: ${{ secrets.RAW_PACKS_URL }}
         run: |
           if [ -z "$RAW_PACKS_URL" ]; then
-            echo "::error::Add a repository secret RAW_PACKS_URL: a download link to a zip of your raw/ folder (see README)."
-            exit 1
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::RAW_PACKS_URL is not set, building with a placeholder assets blob (no game models)."
+            exit 0
           fi
           curl -fsSL "$RAW_PACKS_URL" -o "$RUNNER_TEMP/raw.zip"
           unzip -q "$RUNNER_TEMP/raw.zip" -d "$RUNNER_TEMP/raw-unzipped"
           # accept a zip with raw/ at the top or the contents directly
           if [ -d "$RUNNER_TEMP/raw-unzipped/raw" ]; then mv "$RUNNER_TEMP/raw-unzipped/raw" raw; else mv "$RUNNER_TEMP/raw-unzipped" raw; fi
           ls raw
+          echo "have=true" >> "$GITHUB_OUTPUT"
 
       - name: Cache Blender
         id: blender-cache
+        if: steps.packs.outputs.have == 'true'
         uses: actions/cache@v4
         with:
           path: ~/blender
           key: blender-${{ env.BLENDER_VERSION }}
 
       - name: Install Blender
-        if: steps.blender-cache.outputs.cache-hit != 'true'
+        if: steps.packs.outputs.have == 'true' && steps.blender-cache.outputs.cache-hit != 'true'
         run: |
           minor="${BLENDER_VERSION%.*}"
           curl -fsSL "https://download.blender.org/release/Blender${minor}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" -o "$RUNNER_TEMP/blender.tar.xz"
@@ -76,9 +82,14 @@ jobs:
 
       - name: Pack sounds and models into build/sfx.c and build/assets.c
         run: |
-          export BLENDER="$HOME/blender/blender"
+          mkdir -p build
           python3 tools/pack_sfx.py
-          python3 tools/pack.py
+          if [ "${{ steps.packs.outputs.have }}" = "true" ]; then
+            export BLENDER="$HOME/blender/blender"
+            python3 tools/pack.py
+          else
+            python3 tools/stub_assets.py
+          fi
           ls -l build/assets.c build/sfx.c
 
       - name: Android SDK pieces
